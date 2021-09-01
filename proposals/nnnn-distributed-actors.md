@@ -208,7 +208,7 @@ func example2(a: Player, b: Player) async throws {
 
 In addition to conforming to `Sendable`, a distributed function's parameters and its return type are all required to conform to the [`Codable` protocol](https://developer.apple.com/documentation/swift/codable). A codable value supports serialization and deserialization, which is nessecary in order to maintain location transparency. For example, servicing a method call on a distributed actor instance can involve sending the arguments to another process and awaiting a response.
 
-Like a regular actor method, an expression that calls a distributed function is  treated as `async` from outside of the actor's isoalation. But for a distributed actor, such calls are _also_ treated as `throws` when outside of the actor's isolation, because a request to call a distributed method is not guaranteed to recieve a response. The underlying process that hosts the distributed actor instance may be on another machine that crashed, or a connection may be lost, etc. To help make this clear, consider the following example, which contains only the nessecary `try` and `await` expressions:
+Like a regular actor method, an expression that calls a distributed function is  treated as `async` from outside of the actor's isoalation. But for a distributed actor, such calls are _also_ treated as `throws` when outside of the actor's isolation, because a request to call a distributed method is not guaranteed to recieve a response. The underlying process that hosts the distributed actor instance may be on another machine that crashed, or a connection may be lost, etc. To help make this clear, consider the following example, which contains only the necessary `try` and `await` expressions:
 
 ```swift
 distributed actor Greeter {
