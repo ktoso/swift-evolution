@@ -465,7 +465,7 @@ actor B {
 }
 ```
 
-Potential future work could enable static checking where a relationship between actors is expressed statically (actor B declaring that it is on the same serial executor as a specific instance of `A`), and therefore awaits would not be necessary between such two specific actor instances. Such work is not within the scope of this initial proposal though, and only the dynamic aspect is proposed right now. Do note however that
+Potential future work could enable static checking where a relationship between actors is expressed statically (actor B declaring that it is on the same serial executor as a specific instance of `A`), and therefore awaits would not be necessary between such two specific actor instances. Such work is not within the scope of this initial proposal though, and only the dynamic aspect is proposed right now. 
 
 At this point, similar to Dispatch, these APIs only offer an "assert" / "precondition" version. And currently the way to dynamically get a boolean answer about being on a specific executor is not exposed. 
 
@@ -507,7 +507,7 @@ Swift's concurrency runtime has already been using executors, jobs and tasks sin
 
 The design of `SerialExecutor` currently does not support non-reentrant actors, and it does not support executors for which dispatch is always synchronous (e.g. that just acquire a traditional mutex).
 
-To further explain the relationship of new and existing APIs in this proposal, we opted to keep the `@available` annotations on the discussed types, so that it is clearer which APIs exist today and cannot be entirely changed, and which APIs are new additions. Notably, there are no official APIs for operations like running a job before they were introduced in this prposal.
+To further explain the relationship of new and existing APIs in this proposal, we opted to keep the `@available` annotations on the discussed types, so that it is clearer which APIs exist today and cannot be entirely changed, and which APIs are new additions. Notably, there are no official APIs for operations like running a job before they were introduced in this proposal.
 
 ## Effect on API resilience
 
