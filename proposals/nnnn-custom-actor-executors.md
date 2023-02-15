@@ -344,10 +344,10 @@ It is also possible for libraries to offer protocols where a default, library sp
 
 ```swift
 protocol WithSpecifiedExecutor: Actor {
-  nonisolated var executor: LibrarySecificExecutor { get }
+  nonisolated var executor: LibrarySpecificExecutor { get }
 }
 
-protocol LibrarySecificExecutor: SerialExecutor {}
+protocol LibrarySpecificExecutor: SerialExecutor {}
 
 extension LibrarySpecificActor {
   /// Establishes the WithSpecifiedExecutorExecutor as the serial
