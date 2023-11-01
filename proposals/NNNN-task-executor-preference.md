@@ -451,7 +451,7 @@ func function() async {
 
 #### What about the Main Actor?
 
-While the `MainActor` is not really special under this model, and behaves just as any other actor _with_ an specific executor requirement. 
+The `MainActor` is not really special under this model, and behaves just as any other actor _with_ a specific executor requirement. 
 
 It is worth reminding that using the main actor's executor as a preferred excecutor would have the same effect as with any other executor. While usually using the main actor as preferred executor is not recommended. After all, this is why the original proposal was made to make nonisolated async functions hop *off* from their calling context, in order to free the main actor to interleave other work while other asynchronous work is happening.
 
