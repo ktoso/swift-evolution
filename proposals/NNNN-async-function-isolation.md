@@ -12,7 +12,14 @@
 Swift's general philosophy is to prioritize safety and ease-of-use over
 performance, while still providing tools to write more efficient code. The
 current behavior of nonisolated async functions prioritizes performance at the
-expense of usability.
+expense of usability. // nitpick: current semantics don't really prioritize performance -- hopping "off" as we do today hurts performance.
+
+> Maybe consider:
+>
+> Swift's current semantics for nonisolated asynchronous don't provide a satisfying solution
+> on either of those. Nonisolated asynchronous functions currently (since SE-0338) always
+> change their execution to the concurrent global executor, introducing often un-necessary context hopping. 
+> This behavior can be counter-intuitive and frequently catches developers off guard, or leads to convoluted design patterns countering this behavior.
 
 This proposal changes the behavior of nonisolated async functions to inherit
 the isolation of the caller, and introduces an explicit way to state that an
@@ -39,6 +46,8 @@ reverses the decision made in
 - [Alternatives considered](#alternatives-considered)
   - [Different spelling for `@concurrent`](#different-spelling-for-concurrent)
   - [Don't introduce a type attribute for `@concurrent`](#dont-introduce-a-type-attribute-for-concurrent)
+
+TODO: we're missing discussion of task executors and how they're impacted by this.
 
 ## Motivation
 
@@ -70,7 +79,7 @@ actor MyActor {
   func call() async {
     x.performSync() // okay
 
-    await x.performAsync() // error
+    await x.performAsync() // error: Sending 'self.x' risks causing data races
   }
 }
 ```
@@ -157,15 +166,16 @@ lead to a data race if actor-isolated state is passed to the `body` parameter.
 
 Moreover, the above explanation of isolation rules for async closures is
 extremely difficult to understand; the default isolation rules are too
-complicated.
+complicated. // yeah the above explanation really well illustrates how it's too hard to reason about heh :) 
 
 ## Proposed solution
 
 I propose changing nonisolated async functions to inherit the isolation of the
 caller by default. This means that nonisolated functions always have the same
 isolation rules, regardless of whether the function is synchronous or
-asynchronous. The `@concurrent` declaration attribute can be used to opt into
-async functions always running concurrently with actors.
+asynchronous. 
+
+We also introduce a new `@concurrent` declaration attribute, that can be used to opt out of the default isolation inheritance behavior.
 
 ## Detailed design
 
@@ -192,24 +202,40 @@ actor MyActor {
 
 This is done by implicitly passing an isolated parameter to the async function.
 
+// NOTE --- I see this was answered below in "`#isolation` macro expansion" and it's a good reason to do it this way; +1
+// OLD notes:
+//   Hm? That'd mean that has ABI impact? 
+//   Runtime wise, I thought this is going to be handled by removing the "hop" in the nonisolated async func preamble
+//   But perhaps we need the parameter for some other reason?
+
 `@Sendable` and `sending` closures that are nonisolated still run off of any
 actor's executor. These closures don't face the same usability issues as
 nonisolated async function declarations because they must be able to cross
 isolation boundaries by definition.
 
-### Concurrent function isolation
+// TODO: for myself... I'm not sure about the closures; Should we not say that no ISOLATION is maintained but we don't guarantee where they run instead?
+// This way we can invoke them synchronously on actors, multiple ones; the current wording suggests we'll force hops to global which seems suspicious.
+// I need to write some examples for these to think it through deeper.
 
-Async functions can be declared to always switch off of an actor to run using
-the `@concurrent` declaration attribute:
+### Concurrent function isolation 
+
+// nitpicking that I don't think we should call this "concurrent isolation", need other name... it's not "isolation" really.
+
+Async functions can be declared to always hop off of an actor to run using
+the `@concurrent` declaration attribute: // maybe let's stick to "hop" wording? "switch" we have for "actor switching" which is not entirely the same
 
 ```swift
 struct S: Sendable {
-  @concurrent func alwaysSwitch() async { ... }
+  @concurrent func alwaysHopOff() async { ... }
 }
 ```
 
+// Worth asking here: What does @Sendable func alwaysHopOff() async { ... } mean then?
+// Could it take on the role that this new attribute is being given?
+// NOTE: that contradicts my previous point though, so perhaps not! As we'd want @Sendable to drop static isolation but not necessarily force hops I think maybe...
+
 The `@concurrent` attribute cannot be applied to synchronous functions. This is
-an artifical limitation that could later be lifted if use cases arise.
+an artifical limitation that could later be lifted if use cases arise. // Is it artificial? If concurrent means "always hop off calling actor" the a synchronous function cannot do this; as it cannot make a hop in preamble. Something is unclear here to me?
 
 `@concurrent` is both a declaration attribute and a type attribute. The type
 of an `@concurrent` function declaration is an `@concurrent` function type.
@@ -225,23 +251,27 @@ actor:
 ```swift
 class NotSendable {}
 
-@concurrent func alwaysSwitch(ns: NotSendable) async { ... }
+@concurrent func alwaysHopOff(ns: NotSendable) async { ... }
 
 actor MyActor {
   let ns: NotSendable = .init()
 
   func callConcurrent() async {
-    await alwaysSwitch(ns: ns) // error
+    await alwaysHopOff(ns: ns) // error: ??? sending not-Sendable value NotSendable risks dataraces ...
 
     let disconnected = NotSendable()
-    await alwaysSwitch(ns: disconnected) // okay
+    await alwaysHopOff(ns: disconnected) // okay
   }
 }
 ```
 
+// TODO: this probably deserves another example with `sending` on the parameter? Just so people get to familiarize themselfes with it in such situation. I often see folks forget/don't know it exists
+
 It is an error to use `@concurrent` together with another form of isolation,
 including global actors, isolated parameters, `nonisolated`, and
 `@isolated(any)`.
+
+// IDEA: I think this really hints at a good spelling for this @isolated(never) -- we're literarily saying this isn't taking any isolation from anyone in a way, right?
 
 ### Task isolation inheritance
 
@@ -267,9 +297,20 @@ be used concurrently between the caller of `createTask` and the newly
 created task.
 
 This decision is deliberate to match the semantics of unstructured task
-creation in nonisolated synchronous functions. Note that unstructured task
+creation in nonisolated synchronous functions. 
+
+Note that unstructured task
 creation in methods with isolated parameters already do not inherit isolation
 if the isolated parameter is not explicitly captured.
+
+> don't we think that's a bug, not a feature though?
+>  But yes the explicit capture is how it works so okey to say it here, no need to change
+>
+> Maybe consider unless wording? Reads a bit clearer to me?
+>
+> > Note that unstructured task
+> > creation in methods with isolated parameters already do not inherit isolation
+> > unless the isolated parameter is explicitly captured.
 
 Unstructured tasks created in concurrent async functions can also run
 concurrently with the enclosing function:
@@ -288,10 +329,16 @@ class NotSendable {
 }
 ```
 
+// Naming, we'll revisit later:
+//   Another gut reaction to "@concurrent" is that it gives me similar meaning vibes to reentrant... "this function may run concurrently" is way too close too rentrancy so it's a bit confusing...
+
 ### `#isolation` macro expansion
 
 Uses of the `#isolation` macro will expand to the implicit isolated parameter.
 For example, the following program prints `Optional(Swift.MainActor)`:
+
+// NOTE: Ah okey this explains why the adding of the parameter -- which I had a question about above.
+// Yeah that's a good reason, it'll allow carrying through isolation to 3rd parties/funcs/libs nicely... +1 on this part of the design for sure.
 
 ```swift
 nonisolated func printIsolation() async {
@@ -330,6 +377,10 @@ Note that this introduces a semantic difference compared to synchronous
 nonisolated functions, where there is no implicit isolated parameter and
 `#isolation` always expands to `nil`. For example, the following program prints
 `nil`:
+
+// Yeah that's pretty funny... in majority of cases should be fine... as a synchronous func only calls synchronous code, it should not need to rely on passing the #isolation too often, 
+// as methods taking that would usually be async... I think this is a bit "oh!" but it's not a deal breaker, let's document it very explicitly on #isolated macro docs and we're good here.
+// weird patterns like carrying #isolation through synchronous func to then spawn a Task{} on it I don't really care to support well... as long as people do structured well, this also works well; +1
 
 ```swift
 nonisolated func printIsolation() {
@@ -629,6 +680,10 @@ class NotSendable { ... }
 
 ### Executor switching
 
+// Not sure I'm comfortable with calling this 'executor' 'switching' hm, actor hopping or actor executor hopping would sound less conflating terminology I think.
+// I'd check with John... I think we'd prefer not to call these "switch" hmmm... and stick to "hop"; 
+// actor/executor switching is then we don't give up executor but continue running different actor without releasing executor AFAIR, unless I'm misremembering?
+
 Async functions switch executors in the implementation when entering the
 function, and after any calls to async functions. Isolated functions switch to
 the isolated parameter or global actor's executor, and `@concurrent` functions
@@ -669,12 +724,22 @@ nonisolated func inheritIsolation() async {
 For most calls, the switch upon entering the function will have no effect,
 because it's already running on the executor of the actor parameter.
 
+### Task executor preferences
+
+// suggest adding a new h3 here, so it's easier to find
+
 A task executor preference can still be used to configure where a nonisolated
 async function runs. However, if the nonisolated async function was called from
 an actor with a custom executor, the task executor preference will not apply.
 Otherwise, the code will risk a data-race, because the task executor preference
 does not apply to actor-isolated methods with custom executors, and the
 nonisolated async method can be passed mutable state from the actor.
+
+// Hmm... yeah I see how we have to do this... since now those async methods will get the caller isolation so if we'd run on any other thread we'd break the isolation model;
+// This seems safe, okey.
+
+// TODO: show example that @concurrrent/isolated(never) async functions DO respect the task executor preference.
+// I believe those can and should respect it, as we lost isolation so we're not risking concurrent accesses.
 
 ### Import-as-async heuristic
 
