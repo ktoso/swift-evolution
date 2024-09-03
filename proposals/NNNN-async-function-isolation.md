@@ -39,6 +39,7 @@ reverses the decision made in
   - [Isolation inference for closures](#isolation-inference-for-closures)
   - [Function conversions](#function-conversions)
   - [Executor switching](#executor-switching)
+  - // TODO: let's add a section on task executors and expand it a bit more; i'll help with that one
   - [Import-as-async heuristic](#import-as-async-heuristic)
 - [Source compatibility](#source-compatibility)
 - [ABI compatibility](#abi-compatibility)
@@ -46,8 +47,6 @@ reverses the decision made in
 - [Alternatives considered](#alternatives-considered)
   - [Different spelling for `@concurrent`](#different-spelling-for-concurrent)
   - [Don't introduce a type attribute for `@concurrent`](#dont-introduce-a-type-attribute-for-concurrent)
-
-TODO: we're missing discussion of task executors and how they're impacted by this.
 
 ## Motivation
 
