@@ -33,7 +33,7 @@ extension Resource {
 
 extension SomeSystem { 
   func performAction(_ action: some SomeAction) { 
-    guard Task.isCancelled else {
+    guard !Task.isCancelled else {
       // oh no! 
       // If Resource.cleanup calls this while being in a cancelled task,
       // the action would never be performed!
